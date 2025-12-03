@@ -1,0 +1,58 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <h2 class="section-title">Overview <span>Stats</span></h2>
+    <div class="grid">
+      <div>
+        <p class="muted">Employees</p>
+        <div class="badge">{{ stats.employees }}</div>
+      </div>
+      <div>
+        <p class="muted">Leave Requests</p>
+        <div class="badge">{{ stats.leave_requests }}</div>
+      </div>
+      <div>
+        <p class="muted">Asset Handovers</p>
+        <div class="badge">{{ stats.asset_handovers }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="section-title">Recent Leave Requests <span>نموذج إجازة</span></h2>
+    <div class="table-scroll">
+      <table>
+        <tr><th>Employee</th><th>Dates</th><th>Reason</th></tr>
+        {% for req in recent_leave %}
+          {% set emp = (employees | selectattr('id','equalto', req.employee_id) | list | first) %}
+          <tr>
+            <td>{{ emp.name if emp else req.employee_id }}</td>
+            <td>{{ req.start_date }} → {{ req.end_date }}</td>
+            <td>{{ req.reason }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3">No leave requests yet.</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="section-title">Recent Asset Handovers <span>تسليم عهدة</span></h2>
+    <div class="table-scroll">
+      <table>
+        <tr><th>Employee</th><th>Asset</th><th>Tag</th></tr>
+        {% for hand in recent_handover %}
+          {% set emp = (employees | selectattr('id','equalto', hand.employee_id) | list | first) %}
+          <tr>
+            <td>{{ emp.name if emp else hand.employee_id }}</td>
+            <td>{{ hand.asset_name }}</td>
+            <td>{{ hand.asset_tag }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3">No asset handovers yet.</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

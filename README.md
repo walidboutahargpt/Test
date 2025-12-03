@@ -1,87 +1,44 @@
-# Lightweight HR Mini-System
+# Lightweight HR Mini-System (Web)
 
-This repository provides a small, macOS-friendly HR CLI for managing employee profiles, linking them to Google Drive/local folders, generating HR forms, and producing summary reports.
+A macOS-friendly HR mini-system with a modern web UI. Manage employees, leave requests (نموذج إجازة), asset handovers (تسليم عهدة), and generate PDFs for forms and reports—all backed by a simple JSON file.
 
 ## Features
-- Create and view employee profiles with Drive/local folder links.
-- Generate printable Markdown forms:
-  - Leave request form (نموذج إجازة)
-  - Asset handover form (تسليم عهدة)
-- Store data in a single JSON file (`hr_data.json` by default).
-- Produce consolidated HR reports (leave requests and asset handovers).
+- Responsive Flask UI with dashboard, employee list & detail pages, leave requests, asset handovers, and reports.
+- JSON datastore (`hr_data.json`) with automatic demo data seeding on first run (3 sample employees plus sample requests/handovers).
+- PDF generation (ReportLab) for leave requests, asset handovers, and consolidated HR reports saved to `forms_pdfs/` and `reports/`.
+- Quick filtering/search for employees, leave requests, and asset handovers.
+- Mac-friendly setup: no database required; run with a single command.
 
-## Prerequisites
-- Python 3.9+ (preinstalled on macOS).
-
-## Quickstart
+## Quickstart (macOS)
 ```bash
-# Create a virtual environment (optional but recommended)
+# 1) (Optional) Create and activate a virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install the CLI locally (creates the `hr-system` entrypoint)
-pip install .
+# 2) Install dependencies
+python -m pip install -r requirements.txt
 
-# Create an employee profile
-hr-system create-employee --id EMP001 --name "Fatima Ali" --title "HR Generalist" \
-  --email fatima@example.com --folder "https://drive.google.com/..."
+# 3) Start the app
+python hr_system.py
 
-# View the profile
-hr-system show-employee --id EMP001
-
-# Generate a leave request
-hr-system leave-request --id EMP001 --start-date 2025-06-01 --end-date 2025-06-07 \
-  --reason "Family trip"
-
-# Generate an asset handover form
-hr-system asset-handover --id EMP001 --asset-name "MacBook Pro" --asset-tag MBP-2025-17 \
-  --notes "Includes charger and USB-C hub"
-
-# Build consolidated reports
-hr-system reports
+# 4) Open the UI
+open http://localhost:5000  # or paste into your browser
 ```
 
-Generated forms are saved in the `forms/` directory, and reports land in `reports/hr_reports.md`. All HR data is persisted in `hr_data.json`, which you can relocate by passing `--data-file` to any command.
+> On first run, `hr_data.json` is created with demo employees, leave requests, and asset handovers so the UI is populated immediately.
 
-## Packaging and running on macOS
-### 1) Editable install for daily use
-If you want to keep hacking on the code but run it as a command, install it in editable mode:
+## Usage highlights
+- **Dashboard:** quick stats and latest leave/asset activity.
+- **Employees:** search/filter, view, and add new employees. Each profile links to its Google Drive/local folder path.
+- **Leave Request (نموذج إجازة):** create a request, generate a PDF to `forms_pdfs/`, and view all requests with employee filtering.
+- **Asset Handover (تسليم عهدة):** capture handovers, generate PDFs, and filter by employee.
+- **Reports:** view consolidated tables and export a PDF report to `reports/`.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -e .
+## PDF output locations
+- Individual forms: `forms_pdfs/leave_request_<id>.pdf` and `forms_pdfs/asset_handover_<id>.pdf`
+- Consolidated reports: `reports/hr_reports_<timestamp>.pdf`
 
-# Confirm the CLI works
-hr-system -h
-```
-
-### 2) Build a wheel for distribution
-Generate a wheel you can copy to another Mac (no external dependencies needed beyond Python 3.9+):
-
-```bash
-python -m pip install --upgrade build
-python -m build  # produces dist/hr_mini_system-<version>-py3-none-any.whl
-
-# On the target Mac
-pip install dist/hr_mini_system-<version>-py3-none-any.whl
-hr-system -h
-```
-
-### 3) Create a standalone binary (optional)
-If you prefer a single executable without requiring Python on the target machine, package it with PyInstaller:
-
-```bash
-python -m pip install --upgrade pyinstaller
-pyinstaller hr_system.py --onefile --name hr-system
-
-# The binary will be at dist/hr-system (or dist/hr-system.app on macOS)
-./dist/hr-system -h
-```
-
-## Design notes
-- **Architecture:** single-file CLI with a JSON datastore; no external services or databases are required, keeping it lightweight for macOS laptops.
-- **Data model:** employees + recorded leave requests and asset handovers, each form linked to its generated Markdown file.
-- **Printing:** Markdown outputs can be opened in any editor or browser and printed to PDF or paper.
-- **Extensibility:** new form/report types can be added by extending `hr_system.py` with additional subcommands and datastore collections.
+## Development notes
+- Built with Flask + ReportLab; no database dependencies.
+- Data is persisted in `hr_data.json`. Delete the file to regenerate fresh demo data.
+- The Flask app entrypoint is `hr_system.py` (also exposed as `hr-system` if you `pip install .`).

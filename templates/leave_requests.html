@@ -1,0 +1,52 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <h2 class="section-title">Leave Request (نموذج إجازة)</h2>
+    {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+    <form method="post" class="form-grid">
+      <label>Employee
+        <select name="employee_id" required>
+          <option value="">Select employee</option>
+          {% for emp in employees %}
+            <option value="{{ emp.id }}">{{ emp.name }} ({{ emp.id }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Start date<input class="input" type="date" name="start_date" required></label>
+      <label>End date<input class="input" type="date" name="end_date" required></label>
+      <label style="grid-column:1/-1">Reason<textarea class="input" name="reason" required></textarea></label>
+      <div style="grid-column:1/-1; text-align:right"><button class="button" type="submit">Create PDF</button></div>
+    </form>
+  </div>
+  <div class="card">
+    <h2 class="section-title">All Leave Requests</h2>
+    <form class="actions" method="get">
+      <select name="employee_id" class="input" style="max-width:260px">
+        <option value="">Filter by employee</option>
+        {% for emp in employees %}
+          <option value="{{ emp.id }}" {% if filter_emp == emp.id %}selected{% endif %}>{{ emp.name }}</option>
+        {% endfor %}
+      </select>
+      <button class="button secondary" type="submit">Apply</button>
+      <a class="button" href="{{ url_for('leave_requests') }}">Reset</a>
+    </form>
+    <div class="table-scroll">
+      <table>
+        <tr><th>Employee</th><th>Dates</th><th>Reason</th><th>PDF</th></tr>
+        {% for req in requests %}
+          {% set emp = (employees | selectattr('id','equalto', req.employee_id) | list | first) %}
+          <tr>
+            <td>{{ emp.name if emp else req.employee_id }}</td>
+            <td>{{ req.start_date }} → {{ req.end_date }}</td>
+            <td>{{ req.reason }}</td>
+            <td><a href="{{ url_for('serve_form_pdf', filename=req.pdf_path) }}" target="_blank">PDF</a></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4">No leave requests yet.</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

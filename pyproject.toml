@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hr_mini_system"
 version = "0.1.0"
-description = "Lightweight HR mini-system CLI for employee forms and reports"
+description = "Lightweight HR mini-system web app for employee forms and reports"
 authors = [{ name = "HR Team" }]
 readme = "README.md"
 requires-python = ">=3.9"
@@ -16,10 +16,10 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: MacOS :: MacOS X",
 ]
-dependencies = []
+dependencies = ["Flask>=3.0", "reportlab>=3.6"]
 
 [project.scripts]
-hr-system = "hr_system:main"
+hr-system = "hr_system:run"
 
 [tool.setuptools]
 py-modules = ["hr_system"]
