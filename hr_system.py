@@ -1,7 +1,7 @@
-"""Web-based HR mini-system with PDF generation.
+"""Streamlit-based HR mini-system with PDF generation.
 
 Features:
-- Responsive Flask web UI for dashboard, employee management, leave requests, asset handovers, and reports.
+- Modern Streamlit UI with dashboard, employees, leave requests, asset handovers, and reports.
 - JSON datastore with automatic seeding of demo data on first run.
 - PDF generation for leave requests, asset handovers, and consolidated reports.
 - macOS-friendly setup with lightweight dependencies.
@@ -10,21 +10,12 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import sys
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from flask import (
-    Flask,
-    Response,
-    flash,
-    redirect,
-    render_template,
-    request,
-    send_file,
-    send_from_directory,
-    url_for,
-)
+import streamlit as st
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfgen import canvas
@@ -325,185 +316,246 @@ def generate_report_pdf(
     pdf.save()
 
 
-app = Flask(__name__)
-app.secret_key = "hr-mini-system-secret"
+# --- Streamlit UI helpers -------------------------------------------------
 
 
-@app.context_processor
-def inject_common_data() -> Dict[str, object]:
-    return {"nav_counts": store.stats()}
+def render_header(title: str, subtitle: str | None = None) -> None:
+    st.markdown(f"## {title}")
+    if subtitle:
+        st.caption(subtitle)
 
 
-@app.route("/")
-def dashboard() -> str:
+def render_dashboard() -> None:
     stats = store.stats()
     employees = store.list_employees()
     leave_requests = store.list_leave_requests()
     handovers = store.list_asset_handovers()
-    recent_leave = sorted(leave_requests, key=lambda x: x["created_at"], reverse=True)[:3]
-    recent_handover = sorted(handovers, key=lambda x: x["created_at"], reverse=True)[:3]
-    return render_template(
-        "dashboard.html",
-        stats=stats,
-        employees=employees,
-        recent_leave=recent_leave,
-        recent_handover=recent_handover,
-    )
+
+    st.markdown("### Quick stats")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Employees", stats["employees"])
+    c2.metric("Leave Requests", stats["leave_requests"])
+    c3.metric("Asset Handovers", stats["asset_handovers"])
+
+    st.markdown("### Latest activity")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Recent Leave Requests (نموذج إجازة)**")
+        for req in sorted(leave_requests, key=lambda r: r["created_at"], reverse=True)[:3]:
+            emp = next((e for e in employees if e["id"] == req["employee_id"]), None)
+            st.write(f"• {req['start_date']} → {req['end_date']} — {emp['name'] if emp else req['employee_id']}")
+    with col2:
+        st.markdown("**Recent Asset Handovers (تسليم عهدة)**")
+        for handover in sorted(handovers, key=lambda h: h["created_at"], reverse=True)[:3]:
+            emp = next((e for e in employees if e["id"] == handover["employee_id"]), None)
+            st.write(
+                f"• {handover['asset_name']} ({handover['asset_tag']}) — {emp['name'] if emp else handover['employee_id']}"
+            )
 
 
-@app.route("/employees", methods=["GET", "POST"])
-def employees() -> str:
-    error: Optional[str] = None
-    if request.method == "POST":
-        emp_id = request.form.get("emp_id", "").strip()
-        name = request.form.get("name", "").strip()
-        title = request.form.get("title", "").strip()
-        email = request.form.get("email", "").strip()
-        folder = request.form.get("folder", "").strip()
-        if not all([emp_id, name, title, email]):
-            error = "Please fill in all required fields."
-        else:
-            try:
-                store.add_employee(emp_id, name, title, email, folder)
-                flash(f"Employee {name} added successfully", "success")
-                return redirect(url_for("employees"))
-            except ValueError as exc:
-                error = str(exc)
-    query = request.args.get("q", "").lower()
-    employees_list = store.list_employees()
+def render_employees() -> None:
+    render_header("Employees", "Directory with search and quick links")
+    query = st.text_input("Search by name, title, email, or ID", key="emp-search")
+    employees = store.list_employees()
     if query:
-        employees_list = [
+        employees = [
             emp
-            for emp in employees_list
-            if query in emp["name"].lower()
-            or query in emp["title"].lower()
-            or query in emp["email"].lower()
-            or query in emp["id"].lower()
+            for emp in employees
+            if query.lower() in emp["name"].lower()
+            or query.lower() in emp["title"].lower()
+            or query.lower() in emp["email"].lower()
+            or query.lower() in emp["id"].lower()
         ]
-    return render_template("employees.html", employees=employees_list, query=query, error=error)
 
-
-@app.route("/employees/<emp_id>")
-def employee_detail(emp_id: str) -> Response | str:
-    employee = store.get_employee(emp_id)
-    if not employee:
-        flash("Employee not found", "error")
-        return redirect(url_for("employees"))
-    leave_requests = [req for req in store.list_leave_requests() if req["employee_id"] == emp_id]
-    handovers = [ho for ho in store.list_asset_handovers() if ho["employee_id"] == emp_id]
-    return render_template(
-        "employee_detail.html",
-        employee=employee,
-        leave_requests=leave_requests,
-        handovers=handovers,
+    st.dataframe(
+        employees,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "id": "Employee ID",
+            "name": "Name",
+            "title": "Title",
+            "email": "Email",
+            "folder_link": "Folder link",
+            "created_at": None,
+        },
     )
 
-
-@app.route("/leave-requests", methods=["GET", "POST"])
-def leave_requests() -> str:
-    error: Optional[str] = None
-    employees = store.list_employees()
-    if request.method == "POST":
-        emp_id = request.form.get("employee_id", "").strip()
-        start_date = request.form.get("start_date", "").strip()
-        end_date = request.form.get("end_date", "").strip()
-        reason = request.form.get("reason", "").strip()
-        if not all([emp_id, start_date, end_date, reason]):
-            error = "All fields are required."
-        else:
-            employee = store.get_employee(emp_id)
-            if not employee:
-                error = "Employee not found."
+    with st.expander("Add new employee"):
+        emp_id = st.text_input("Employee ID", key="emp-id")
+        name = st.text_input("Full name", key="emp-name")
+        title = st.text_input("Title", key="emp-title")
+        email = st.text_input("Email", key="emp-email")
+        folder = st.text_input("Google Drive / local folder link", key="emp-folder")
+        if st.button("Save employee"):
+            if not all([emp_id, name, title, email]):
+                st.error("Please fill in all required fields.")
             else:
-                pdf_path = FORMS_DIR / f"leave_request_{emp_id}_{uuid.uuid4().hex[:6]}.pdf"
-                record = store.add_leave_request(emp_id, start_date, end_date, reason, pdf_path)
-                generate_leave_pdf(employee, record, pdf_path)
-                flash("Leave request saved and PDF generated.", "success")
-                return redirect(url_for("leave_requests"))
+                try:
+                    store.add_employee(emp_id.strip(), name.strip(), title.strip(), email.strip(), folder.strip())
+                    st.success(f"Employee {name} added successfully.")
+                except ValueError as exc:
+                    st.error(str(exc))
 
-    filter_emp = request.args.get("employee_id", "").strip()
+    st.markdown("---")
+    st.markdown("### Employee details")
+    selected = st.selectbox("View employee", [emp["id"] for emp in store.list_employees()])
+    employee = store.get_employee(selected)
+    if employee:
+        st.subheader(employee["name"])
+        st.write(f"**ID:** {employee['id']}")
+        st.write(f"**Title:** {employee['title']}")
+        st.write(f"**Email:** {employee['email']}")
+        if employee.get("folder_link"):
+            st.write(f"**Folder:** {employee['folder_link']}")
+
+        leave_requests = [req for req in store.list_leave_requests() if req["employee_id"] == employee["id"]]
+        handovers = [ho for ho in store.list_asset_handovers() if ho["employee_id"] == employee["id"]]
+        st.markdown("**Leave Requests (نموذج إجازة):**")
+        st.dataframe(leave_requests, use_container_width=True, hide_index=True)
+        st.markdown("**Asset Handovers (تسليم عهدة):**")
+        st.dataframe(handovers, use_container_width=True, hide_index=True)
+
+
+def render_leave_requests() -> None:
+    render_header("Leave Requests (نموذج إجازة)", "Create and browse leave forms")
+    employees = store.list_employees()
+    emp_options = {f"{emp['name']} ({emp['id']})": emp["id"] for emp in employees}
+
+    with st.form("leave-form"):
+        employee_choice = st.selectbox("Employee", list(emp_options.keys()))
+        start_date = st.date_input("Start date")
+        end_date = st.date_input("End date")
+        reason = st.text_area("Reason")
+        submitted = st.form_submit_button("Save & generate PDF")
+
+    if submitted:
+        emp_id = emp_options[employee_choice]
+        employee = store.get_employee(emp_id)
+        if not employee:
+            st.error("Employee not found.")
+        else:
+            pdf_path = FORMS_DIR / f"leave_request_{emp_id}_{uuid.uuid4().hex[:6]}.pdf"
+            record = store.add_leave_request(
+                emp_id,
+                start_date.isoformat(),
+                end_date.isoformat(),
+                reason.strip(),
+                pdf_path,
+            )
+            generate_leave_pdf(employee, record, pdf_path)
+            st.success("Leave request saved and PDF generated.")
+            st.download_button("Download PDF", pdf_path.read_bytes(), file_name=pdf_path.name)
+
+    st.markdown("---")
+    filter_emp = st.selectbox("Filter by employee", ["All"] + list(emp_options.keys()))
     requests_list = store.list_leave_requests()
-    if filter_emp:
-        requests_list = [req for req in requests_list if req["employee_id"] == filter_emp]
-    return render_template(
-        "leave_requests.html",
-        employees=employees,
-        requests=requests_list,
-        filter_emp=filter_emp,
-        error=error,
-    )
+    if filter_emp != "All":
+        selected_id = emp_options[filter_emp]
+        requests_list = [req for req in requests_list if req["employee_id"] == selected_id]
+    st.dataframe(requests_list, use_container_width=True, hide_index=True)
+
+    st.markdown("Existing PDFs")
+    _ensure_dirs(FORMS_DIR)
+    for pdf in sorted(FORMS_DIR.glob("leave_request_*.pdf")):
+        st.write(f"• {pdf.name}")
 
 
-@app.route("/asset-handovers", methods=["GET", "POST"])
-def asset_handovers() -> str:
-    error: Optional[str] = None
+def render_asset_handovers() -> None:
+    render_header("Asset Handovers (تسليم عهدة)", "Capture and track company assets")
     employees = store.list_employees()
-    if request.method == "POST":
-        emp_id = request.form.get("employee_id", "").strip()
-        asset_name = request.form.get("asset_name", "").strip()
-        asset_tag = request.form.get("asset_tag", "").strip()
-        notes = request.form.get("notes", "").strip()
-        if not all([emp_id, asset_name, asset_tag]):
-            error = "Employee, asset name, and asset tag are required."
+    emp_options = {f"{emp['name']} ({emp['id']})": emp["id"] for emp in employees}
+
+    with st.form("asset-form"):
+        employee_choice = st.selectbox("Employee", list(emp_options.keys()), key="asset-emp")
+        asset_name = st.text_input("Asset name")
+        asset_tag = st.text_input("Asset tag / serial")
+        notes = st.text_area("Notes")
+        submitted = st.form_submit_button("Save & generate PDF")
+
+    if submitted:
+        emp_id = emp_options[employee_choice]
+        employee = store.get_employee(emp_id)
+        if not employee:
+            st.error("Employee not found.")
         else:
-            employee = store.get_employee(emp_id)
-            if not employee:
-                error = "Employee not found."
-            else:
-                pdf_path = FORMS_DIR / f"asset_handover_{emp_id}_{uuid.uuid4().hex[:6]}.pdf"
-                record = store.add_asset_handover(emp_id, asset_name, asset_tag, notes, pdf_path)
-                generate_asset_pdf(employee, record, pdf_path)
-                flash("Asset handover saved and PDF generated.", "success")
-                return redirect(url_for("asset_handovers"))
+            pdf_path = FORMS_DIR / f"asset_handover_{emp_id}_{uuid.uuid4().hex[:6]}.pdf"
+            record = store.add_asset_handover(emp_id, asset_name.strip(), asset_tag.strip(), notes.strip(), pdf_path)
+            generate_asset_pdf(employee, record, pdf_path)
+            st.success("Asset handover saved and PDF generated.")
+            st.download_button("Download PDF", pdf_path.read_bytes(), file_name=pdf_path.name)
 
-    filter_emp = request.args.get("employee_id", "").strip()
+    st.markdown("---")
+    filter_emp = st.selectbox("Filter by employee", ["All"] + list(emp_options.keys()), key="asset-filter")
     handovers_list = store.list_asset_handovers()
-    if filter_emp:
-        handovers_list = [ho for ho in handovers_list if ho["employee_id"] == filter_emp]
-    return render_template(
-        "asset_handovers.html",
-        employees=employees,
-        handovers=handovers_list,
-        filter_emp=filter_emp,
-        error=error,
-    )
+    if filter_emp != "All":
+        selected_id = emp_options[filter_emp]
+        handovers_list = [ho for ho in handovers_list if ho["employee_id"] == selected_id]
+    st.dataframe(handovers_list, use_container_width=True, hide_index=True)
+
+    st.markdown("Existing PDFs")
+    _ensure_dirs(FORMS_DIR)
+    for pdf in sorted(FORMS_DIR.glob("asset_handover_*.pdf")):
+        st.write(f"• {pdf.name}")
 
 
-@app.route("/reports")
-def reports() -> str:
+def render_reports() -> None:
+    render_header("Reports", "Summaries plus PDF export")
     employees = store.data.get("employees", {})
     leave_requests = store.list_leave_requests()
     handovers = store.list_asset_handovers()
-    return render_template(
-        "reports.html",
-        employees=employees,
-        leave_requests=leave_requests,
-        handovers=handovers,
+
+    st.markdown("### Leave requests")
+    st.dataframe(leave_requests, use_container_width=True, hide_index=True)
+
+    st.markdown("### Asset handovers")
+    st.dataframe(handovers, use_container_width=True, hide_index=True)
+
+    if st.button("Generate PDF report"):
+        pdf_path = REPORTS_DIR / f"hr_reports_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        generate_report_pdf(employees, leave_requests, handovers, pdf_path)
+        st.success("Report PDF generated.")
+        st.download_button("Download report", pdf_path.read_bytes(), file_name=pdf_path.name)
+
+    st.markdown("Existing reports")
+    _ensure_dirs(REPORTS_DIR)
+    for pdf in sorted(REPORTS_DIR.glob("hr_reports_*.pdf")):
+        st.write(f"• {pdf.name}")
+
+
+# --- Entrypoint -----------------------------------------------------------
+
+
+def main() -> None:
+    _ensure_dirs(FORMS_DIR, REPORTS_DIR)
+    st.set_page_config(page_title="HR Mini-System", layout="wide")
+    st.sidebar.title("HR Mini-System")
+    page = st.sidebar.radio(
+        "Navigation",
+        ["Dashboard", "Employees", "Leave Requests", "Asset Handovers", "Reports"],
     )
 
+    if page == "Dashboard":
+        render_dashboard()
+    elif page == "Employees":
+        render_employees()
+    elif page == "Leave Requests":
+        render_leave_requests()
+    elif page == "Asset Handovers":
+        render_asset_handovers()
+    elif page == "Reports":
+        render_reports()
 
-@app.route("/reports/export")
-def export_reports() -> Response:
-    pdf_path = REPORTS_DIR / f"hr_reports_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    generate_report_pdf(store.data.get("employees", {}), store.list_leave_requests(), store.list_asset_handovers(), pdf_path)
-    flash("Report PDF generated.", "success")
-    return send_file(pdf_path, as_attachment=True)
-
-
-@app.route("/forms_pdfs/<path:filename>")
-def serve_form_pdf(filename: str) -> Response:
-    return send_from_directory(FORMS_DIR, filename)
-
-
-@app.route("/reports/<path:filename>")
-def serve_report_file(filename: str) -> Response:
-    return send_from_directory(REPORTS_DIR, filename)
+    st.sidebar.markdown("---")
+    st.sidebar.info("Run via `streamlit run hr_system.py` on macOS.")
 
 
 def run() -> None:
-    """Run the Flask development server."""
-    _ensure_dirs(FORMS_DIR, REPORTS_DIR)
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    """Allow `python hr_system.py` to launch the Streamlit app."""
+    import streamlit.web.cli as stcli
+
+    sys.argv = ["streamlit", "run", str(Path(__file__).resolve())]
+    sys.exit(stcli.main())
 
 
 if __name__ == "__main__":
@@ -511,5 +563,5 @@ if __name__ == "__main__":
 
 # --- Quickstart (macOS) ---
 # 1) Install dependencies:  python -m pip install -r requirements.txt
-# 2) Start the app:         python hr_system.py
-# 3) Open your browser:     http://localhost:5000
+# 2) Start the app:         streamlit run hr_system.py   # or: python hr_system.py
+# 3) Open your browser:     http://localhost:8501

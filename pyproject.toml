@@ -16,7 +16,7 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: MacOS :: MacOS X",
 ]
-dependencies = ["Flask>=3.0", "reportlab>=3.6"]
+dependencies = ["streamlit>=1.36", "reportlab>=3.6"]
 
 [project.scripts]
 hr-system = "hr_system:run"

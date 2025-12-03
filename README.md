@@ -1,9 +1,9 @@
-# Lightweight HR Mini-System (Web)
+# Lightweight HR Mini-System (Streamlit)
 
-A macOS-friendly HR mini-system with a modern web UI. Manage employees, leave requests (نموذج إجازة), asset handovers (تسليم عهدة), and generate PDFs for forms and reports—all backed by a simple JSON file.
+A macOS-friendly HR mini-system with a modern Streamlit UI. Manage employees, leave requests (نموذج إجازة), asset handovers (تسليم عهدة), and generate PDFs for forms and reports—all backed by a simple JSON file.
 
 ## Features
-- Responsive Flask UI with dashboard, employee list & detail pages, leave requests, asset handovers, and reports.
+- Responsive Streamlit UI with dashboard, employee directory, leave requests, asset handovers, and reports.
 - JSON datastore (`hr_data.json`) with automatic demo data seeding on first run (3 sample employees plus sample requests/handovers).
 - PDF generation (ReportLab) for leave requests, asset handovers, and consolidated HR reports saved to `forms_pdfs/` and `reports/`.
 - Quick filtering/search for employees, leave requests, and asset handovers.
@@ -18,11 +18,13 @@ source .venv/bin/activate
 # 2) Install dependencies
 python -m pip install -r requirements.txt
 
-# 3) Start the app
+# 3) Start the app (choose one)
+streamlit run hr_system.py
+# or
 python hr_system.py
 
 # 4) Open the UI
-open http://localhost:5000  # or paste into your browser
+open http://localhost:8501  # or paste into your browser
 ```
 
 > On first run, `hr_data.json` is created with demo employees, leave requests, and asset handovers so the UI is populated immediately.
@@ -39,6 +41,6 @@ open http://localhost:5000  # or paste into your browser
 - Consolidated reports: `reports/hr_reports_<timestamp>.pdf`
 
 ## Development notes
-- Built with Flask + ReportLab; no database dependencies.
+- Built with Streamlit + ReportLab; no database dependencies.
 - Data is persisted in `hr_data.json`. Delete the file to regenerate fresh demo data.
-- The Flask app entrypoint is `hr_system.py` (also exposed as `hr-system` if you `pip install .`).
+- The Streamlit entrypoint is `hr_system.py` (also exposed as `hr-system` if you `pip install .`).

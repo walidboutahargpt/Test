@@ -1,2 +1,2 @@
-Flask>=3.0
+streamlit>=1.36
 reportlab>=3.6
